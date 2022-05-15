@@ -1,0 +1,86 @@
+* {
+  font-family: "Montserrat", sans-serif;
+}
+
+.App {
+  text-align: center;
+}
+
+.stakeCardBtn {
+  background-color: #ff2e43 !important;
+  color: white !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+  font-size: 17px !important;
+  border-radius: 30px !important;
+  margin-top: 10px !important;
+  margin-left: 10px !important;
+  margin-right: 10px !important;
+}
+
+#stakeAmountInput {
+  margin-bottom: 10px !important;
+  margin-top: 10px !important;
+}
+
+#stakeCard {
+  border-radius: 20px;
+  box-shadow: 0 5px 10px rgb(0 0 0 / 16%);
+  margin-bottom: 10px;
+  background-color: #F1F1F1;
+  border: none !important;
+}
+
+.value {
+  color: #ff2e43;
+  font-size: 1.7vw;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.titleBackcolour {
+  background-color: rgb(230, 230, 230) !important;
+  padding-top: 30px;
+  padding-bottom: 30px;
+}
+
+.valueTitle {
+  color: #1a004c;
+  font-size: 15px;
+  margin-bottom: 15px !important;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

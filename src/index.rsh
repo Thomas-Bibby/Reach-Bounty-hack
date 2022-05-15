@@ -16,15 +16,23 @@ const Vote = Struct([
   ["voterAddress", Address],
 ]);
 
-const Opts = Struct([["voteToken", Token]]);
+const TokensRecieved = Struct([
+  ["amount", UInt],
+  ["usersTotalClaimed", UInt],
+]);
+
+const Opts = Struct([
+  ["voteToken", Token],
+  ["initalGovSupply", UInt],
+]);
 
 export const main = Reach.App(() => {
   setOptions({
     // Users deleting their own local state would only hurt themselves.
     // They would lose access to rewards and stake that should be rightfully theirs.
-//untrustworthyMaps: false,
+    //untrustworthyMaps: false,
     // Would like to turn this on but it would take more time to satisfy the theorem prover.
-//verifyArithmetic: false,
+    //verifyArithmetic: false,
   });
   ////////// Initial Setup \\\\\\\\\\
   const Deployer = Participant("Deployer", {
@@ -36,6 +44,8 @@ export const main = Reach.App(() => {
     verifyResult: Fun([], Issue),
     voteFor: Fun([UInt], Vote),
     voteAgainst: Fun([UInt], Vote),
+    claimGovernanceTokens: Fun([], TokensRecieved),
+    AddToGovernancePool: Fun([UInt], TokensRecieved)
   });
 
   const V = View({
@@ -48,6 +58,8 @@ export const main = Reach.App(() => {
     issueTotalVotesFor: UInt,
     issueTotalVotesAgainst: UInt,
     issueVotagePercentage: UInt,
+    IssueVotagePercentageRequired: UInt,
+    GovernanceTokenPool: UInt,
   });
   init();
   ////////// Initial Setup \\\\\\\\\\
@@ -59,14 +71,17 @@ export const main = Reach.App(() => {
 
   Deployer.publish(opts, voteToken);
   V.opts.set(opts);
+  const { initalGovSupply } = opts;
   commit();
 
-  const paymentAmount = 10000;
+  const paymentAmount = 10000 + initalGovSupply;
   Deployer.pay([[paymentAmount, voteToken]]);
 
   const Voters = new Map(UInt); // amt Voted by addr
+  const votersClaimedGovToken = new Map(UInt); // amt Voted by addr
 
   const lookupVoter = (addr) => fromSome(Voters[addr], 0);
+  const lookupVoterGovTokenRec = (addr) => fromSome(votersClaimedGovToken[addr], 0);
   V.voted.set(lookupVoter);
 
   ////////// API setup \\\\\\\\\\
@@ -78,7 +93,9 @@ export const main = Reach.App(() => {
     IssueTotalVotesFor,
     IssueTotalVotesAgainst,
     IssueVotagePercentage,
-  ] = parallelReduce([this, 0, 0, 0, 0, 0])
+    IssueVotagePercentageRequired,
+    GovernanceTokenPool,
+  ] = parallelReduce([this, 56, 0, 0, 0, 0, 50, initalGovSupply])
     .define(() => {
       const lct = lastConsensusTime();
       // Any initial definitions or assert functions
@@ -88,8 +105,10 @@ export const main = Reach.App(() => {
       V.issueTotalVotesFor.set(IssueTotalVotesFor);
       V.issueTotalVotesAgainst.set(IssueTotalVotesAgainst);
       V.issueVotagePercentage.set(IssueVotagePercentage);
+      V.IssueVotagePercentageRequired.set(IssueVotagePercentageRequired);
+      V.GovernanceTokenPool.set(GovernanceTokenPool);
     })
-    .invariant(balance() == 0 && balance(voteToken) >= 0 && balance(voteToken) >= IssueTotalVotes) // FIGURE OUT WHY this causes an invariant after loop
+    .invariant(balance() == 0 && balance(voteToken) >= 0 && balance(voteToken) >= IssueTotalVotes + GovernanceTokenPool) // FIGURE OUT WHY this causes an invariant after loop
     .paySpec([voteToken])
     .while(IssueTotalVotes >= 0 && balance(voteToken) >= IssueTotalVotes)
       /////////  API setup  \\\\\\\\\
@@ -114,7 +133,7 @@ export const main = Reach.App(() => {
           votingResult: 2,
         });
         k(newIssue);
-        return [newIssueCreatorAddress, votesNeeded, 0, 0, 0, votesPerc];
+        return [newIssueCreatorAddress, votesNeeded, 0, 0, 0, 0, votesPerc, GovernanceTokenPool];
       }
     )
     .api(
@@ -130,8 +149,7 @@ export const main = Reach.App(() => {
       () => [0, [0, voteToken]], // completes transfer for us
       (k) => {
         // Calculate if issue was successful
-        const calcPer = (IssueTotalVotesFor * 100) / IssueTotalVotes; // it doesn't like decimals so * 100 stops that decimal issue
-        if (calcPer >= IssueVotagePercentage)
+        if (IssueVotagePercentage >= IssueVotagePercentageRequired)
         { // Vote was successful
           const closedIssue = Issue.fromObject({
             creatorAddress: IssueCreatorAdd,
@@ -166,6 +184,8 @@ export const main = Reach.App(() => {
           0,
           0,
           0,
+          0,
+          GovernanceTokenPool,
         ];
       }
     )
@@ -181,6 +201,10 @@ export const main = Reach.App(() => {
         // Calculating new total votes
         const newIssueTotalVotesFor = IssueTotalVotesFor + amt;
         const newIssueTotalVotes = IssueTotalVotes + amt;
+
+        // Voting per
+        const x = newIssueTotalVotesFor * 100;
+        const newVotingPer = x / newIssueTotalVotes;
 
         // Adding user to voting pool and how much they have voted
         const newUserVoted = lookupVoter(this) + amt;
@@ -199,7 +223,9 @@ export const main = Reach.App(() => {
           newIssueTotalVotes,
           newIssueTotalVotesFor,
           IssueTotalVotesAgainst,
-          IssueVotagePercentage,
+          newVotingPer,
+          IssueVotagePercentageRequired,
+          GovernanceTokenPool,
         ];
       }
     )
@@ -226,7 +252,9 @@ export const main = Reach.App(() => {
           voterAddress: this,
         });
 
-        // send tokens if voting is closed
+        // Voting per
+        const x = IssueTotalVotesFor * 100;
+        const newVotingPer = x / newIssueTotalVotes;
 
         k(newVote);
         return [
@@ -235,7 +263,68 @@ export const main = Reach.App(() => {
           newIssueTotalVotes,
           IssueTotalVotesFor,
           newIssueTotalVotesAgainst,
+          newVotingPer,
+          IssueVotagePercentageRequired,
+          GovernanceTokenPool,
+        ];
+      }
+    )
+    .api(
+      Voter.claimGovernanceTokens,
+      () => {
+        assume(GovernanceTokenPool >= 10000000, "Not enough tokens left in pool");
+      },
+      () => [0, [0, voteToken]],
+      (k) => {
+        const newGovTokenPool = GovernanceTokenPool - 10000000;
+
+        const newGovTokenRec = lookupVoterGovTokenRec(this) + 10000000;
+        votersClaimedGovToken[this] = newGovTokenRec;
+
+        transfer(10000000, voteToken).to(this);
+
+        const tokensGiven = TokensRecieved.fromObject({
+          amount: 10000000,
+          usersTotalClaimed: newGovTokenRec,
+        });
+
+        k(tokensGiven);
+        return [
+          IssueCreatorAdd,
+          IssueVotesNeeded,
+          IssueTotalVotes,
+          IssueTotalVotesFor,
+          IssueTotalVotesAgainst,
           IssueVotagePercentage,
+          IssueVotagePercentageRequired,
+          newGovTokenPool,
+        ];
+      }
+    )
+    .api(
+      Voter.AddToGovernancePool,
+      (amt) => {
+        assume(this == Deployer, "You are not the admin you cant add tokens");
+      },
+      (amt) => [0, [amt, voteToken]],
+      (amt, k) => {
+        const newGovTokenPool = GovernanceTokenPool + amt;
+
+        const tokensGiven = TokensRecieved.fromObject({
+          amount: amt,
+          usersTotalClaimed: newGovTokenPool,
+        });
+
+        k(tokensGiven);
+        return [
+          IssueCreatorAdd,
+          IssueVotesNeeded,
+          IssueTotalVotes,
+          IssueTotalVotesFor,
+          IssueTotalVotesAgainst,
+          IssueVotagePercentage,
+          IssueVotagePercentageRequired,
+          newGovTokenPool,
         ];
       }
     );
