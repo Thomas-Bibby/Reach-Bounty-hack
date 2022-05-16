@@ -45,7 +45,7 @@ export const main = Reach.App(() => {
     voteFor: Fun([UInt], Vote),
     voteAgainst: Fun([UInt], Vote),
     claimGovernanceTokens: Fun([], TokensRecieved),
-    AddToGovernancePool: Fun([UInt], TokensRecieved)
+    AddToGovernancePool: Fun([UInt], TokensRecieved),
   });
 
   const V = View({
@@ -81,7 +81,8 @@ export const main = Reach.App(() => {
   const votersClaimedGovToken = new Map(UInt); // amt Voted by addr
 
   const lookupVoter = (addr) => fromSome(Voters[addr], 0);
-  const lookupVoterGovTokenRec = (addr) => fromSome(votersClaimedGovToken[addr], 0);
+  const lookupVoterGovTokenRec = (addr) =>
+    fromSome(votersClaimedGovToken[addr], 0);
   V.voted.set(lookupVoter);
 
   ////////// API setup \\\\\\\\\\
@@ -108,16 +109,23 @@ export const main = Reach.App(() => {
       V.IssueVotagePercentageRequired.set(IssueVotagePercentageRequired);
       V.GovernanceTokenPool.set(GovernanceTokenPool);
     })
-    .invariant(balance() == 0 && balance(voteToken) >= 0 && balance(voteToken) >= IssueTotalVotes + GovernanceTokenPool) // FIGURE OUT WHY this causes an invariant after loop
+    .invariant(
+      balance() == 0 &&
+        balance(voteToken) >= 0 &&
+        balance(voteToken) >= IssueTotalVotes + GovernanceTokenPool
+    ) // FIGURE OUT WHY this causes an invariant after loop
     .paySpec([voteToken])
     .while(IssueTotalVotes >= 0 && balance(voteToken) >= IssueTotalVotes)
-      /////////  API setup  \\\\\\\\\
+    /////////  API setup  \\\\\\\\\
     ////////// API Functions \\\\\\\\\\
     .api(
       Voter.createIssue,
       (votesNeeded, votesPerc) => {
         // Check user is deployer
-        assume(IssueTotalVotes >= IssueVotesNeeded, "Another issue is still open");
+        assume(
+          IssueTotalVotes >= IssueVotesNeeded,
+          "Another issue is still open"
+        );
       },
       (votesNeeded, votesPerc) => [0, [0, voteToken]], // completes transfer for us
       (votesNeeded, votesPerc, k) => {
@@ -133,7 +141,16 @@ export const main = Reach.App(() => {
           votingResult: 2,
         });
         k(newIssue);
-        return [newIssueCreatorAddress, votesNeeded, 0, 0, 0, 0, votesPerc, GovernanceTokenPool];
+        return [
+          newIssueCreatorAddress,
+          votesNeeded,
+          0,
+          0,
+          0,
+          0,
+          votesPerc,
+          GovernanceTokenPool,
+        ];
       }
     )
     .api(
@@ -149,8 +166,8 @@ export const main = Reach.App(() => {
       () => [0, [0, voteToken]], // completes transfer for us
       (k) => {
         // Calculate if issue was successful
-        if (IssueVotagePercentage >= IssueVotagePercentageRequired)
-        { // Vote was successful
+        if (IssueVotagePercentage >= IssueVotagePercentageRequired) {
+          // Vote was successful
           const closedIssue = Issue.fromObject({
             creatorAddress: IssueCreatorAdd,
             votesNeeded: IssueVotesNeeded,
@@ -161,8 +178,8 @@ export const main = Reach.App(() => {
             votingResult: 1,
           });
           k(closedIssue);
-        } else 
-        { // Vote was not successful
+        } else {
+          // Vote was not successful
           const closedIssue = Issue.fromObject({
             creatorAddress: IssueCreatorAdd,
             votesNeeded: IssueVotesNeeded,
@@ -177,22 +194,16 @@ export const main = Reach.App(() => {
 
         transfer(IssueTotalVotes, voteToken).to(IssueCreatorAdd);
 
-        return [
-          IssueCreatorAdd,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          GovernanceTokenPool,
-        ];
+        return [IssueCreatorAdd, 0, 0, 0, 0, 0, 0, GovernanceTokenPool];
       }
     )
     .api(
       Voter.voteFor,
       (amt) => {
-        assume(IssueTotalVotes <= IssueVotesNeeded, "Voting has already closed");
+        assume(
+          IssueTotalVotes <= IssueVotesNeeded,
+          "Voting has already closed"
+        );
         assume(IssueCreatorAdd != this, "You can't vote on your own issue");
         assume(amt > 0, "You must vote with more than one voting token");
       },
@@ -232,7 +243,10 @@ export const main = Reach.App(() => {
     .api(
       Voter.voteAgainst,
       (amt) => {
-        assume(IssueTotalVotes <= IssueVotesNeeded, "Voting has already closed");
+        assume(
+          IssueTotalVotes <= IssueVotesNeeded,
+          "Voting has already closed"
+        );
         assume(IssueCreatorAdd != this, "You can't vote on your own issue");
         assume(amt > 0, "You must vote with more than one voting token");
       },
@@ -272,7 +286,10 @@ export const main = Reach.App(() => {
     .api(
       Voter.claimGovernanceTokens,
       () => {
-        assume(GovernanceTokenPool >= 10000000, "Not enough tokens left in pool");
+        assume(
+          GovernanceTokenPool >= 10000000,
+          "Not enough tokens left in pool"
+        );
       },
       () => [0, [0, voteToken]],
       (k) => {
